@@ -65,6 +65,9 @@ sed -i 's/^\s*#\?\s*radius_db\s*=.*$/radius_db = "'"${DB_NAME}"'"/' ${SQL_MODULE
 sed -i 's/^#\s*\(read_clients\s*=\s*yes\)/\1/' ${SQL_MODULE_FILE}
 sed -i 's/^#\s*\(client_table\s*=\s*".*"\)/\1/' ${SQL_MODULE_FILE}
 
+# Comentar la sección TLS para evitar errores si los archivos no existen
+sed -i '/^\s*tls\s*{/,/^\s*}/ s/^/# /' ${SQL_MODULE_FILE}
+
 # Ajustar permisos para el módulo SQL
 chgrp -h freerad /etc/freeradius/3.0/mods-available/sql || true
 chown -R freerad:freerad /etc/freeradius/3.0/mods-enabled/sql || true
