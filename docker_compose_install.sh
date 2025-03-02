@@ -45,9 +45,6 @@ echo "🔄 Reiniciando servicios..."
 sudo systemctl daemon-reexec
 sudo systemctl restart docker
 
-echo "📌 Estado de Docker:"
-sudo systemctl status docker
-
 echo "✅ Instalación completada. Verifica con:"
 echo "   docker --version"
 echo "   docker compose version"
