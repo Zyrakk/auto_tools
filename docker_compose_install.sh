@@ -46,7 +46,7 @@ sudo systemctl daemon-reexec
 sudo systemctl restart docker
 
 echo "📋 Añadiendo el usuario actual al grupo de docker..."
-sudo usermod -aG Docker $USER
+sudo usermod -aG docker $USER
 sudo setfacl -m user:$USER:rw /var/run/docker.sock
 
 echo "✅ Instalación completada. Verifica con:"
