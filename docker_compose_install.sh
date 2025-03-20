@@ -13,7 +13,7 @@ echo "🔄 Actualizando lista de paquetes..."
 sudo apt update
 
 echo "📦 Instalando dependencias necesarias..."
-sudo apt install -y ca-certificates curl
+sudo apt install -y ca-certificates curl acl
 
 echo "📁 Creando directorio para claves GPG..."
 sudo install -m 0755 -d /etc/apt/keyrings
@@ -44,6 +44,10 @@ sudo systemctl enable containerd.service
 echo "🔄 Reiniciando servicios..."
 sudo systemctl daemon-reexec
 sudo systemctl restart docker
+
+echo "📋 Añadiendo el usuario actual al grupo de docker..."
+sudo usermod -aG Docker $USER
+sudo setfacl -m user:$USER:rw /var/run/docker.sock
 
 echo "✅ Instalación completada. Verifica con:"
 echo "   docker --version"
