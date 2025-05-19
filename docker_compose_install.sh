@@ -1,16 +1,18 @@
 #!/bin/bash
 set -euo pipefail
 
-# Leemos info de la distro
+# Cargamos info de la distro
 . /etc/os-release
+# Si ID_LIKE no está definida, la dejamos vacía
+ID_LIKE="${ID_LIKE:-}"
 
-# Determinamos canal de Docker según distro
+# Determinamos el repo correcto
 if [[ "$ID" == "ubuntu" ]] || grep -qi "ubuntu" <<<"$ID_LIKE"; then
   DOCKER_URL="https://download.docker.com/linux/ubuntu"
 elif [[ "$ID" == "debian" ]] || grep -qi "debian" <<<"$ID_LIKE"; then
   DOCKER_URL="https://download.docker.com/linux/debian"
 else
-  echo "❌ Distro no soportada: $ID (ID_LIKE=$ID_LIKE)"
+  echo "❌ Distro no soportada: ID=$ID (ID_LIKE=$ID_LIKE)"
   exit 1
 fi
 
@@ -63,5 +65,5 @@ sudo usermod -aG docker "$USER" || true
 sudo setfacl -m user:"$USER":rw /var/run/docker.sock || true
 
 echo
-echo "✅ ¡Hecho! Ahora cierra sesión y vuelve a entrar para activar el grupo 'docker'."
+echo "✅ ¡Listo! Cierra sesión y vuelve a entrar para activar el grupo 'docker'."
 echo "   Comprueba con: docker --version && docker compose version"
