@@ -1,0 +1,29 @@
+# Autostart para Sway - Inicialización de Workspaces
+# Ubicación: ~/.config/sway/config.d/autostart
+# Autor: Zyrak
+
+# Inicializar workspaces automáticamente al arrancar Sway
+# NOTA: Comentar esta línea si NO quieres que se inicialicen automáticamente
+exec ~/.config/sway/scripts/init-workspaces.sh
+
+# Aplicaciones que siempre deben estar en background
+# (estas no crean ventanas visibles)
+
+# Gestor de portapapeles
+exec wl-paste -t text --watch clipman store
+
+# Gestor de autenticación (para apps que necesitan credenciales)
+exec /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
+
+# Notificaciones
+exec mako
+
+# Gestor de energía (idle y lock)
+exec swayidle -w \
+    timeout 300 'swaylock -f' \
+    timeout 600 'swaymsg "output * dpms off"' \
+    resume 'swaymsg "output * dpms on"' \
+    before-sleep 'swaylock -f'
+
+# Waybar (barra superior)
+exec waybar
