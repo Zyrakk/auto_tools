@@ -89,6 +89,17 @@ cp autostart workspace-keybindings workspaces ~/.config/sway/config.d/
 swaymsg reload
 ```
 
+## Waybar Integration
+
+Add to `~/.config/waybar/config`:
+```json
+"sway/workspaces": {
+    "disable-scroll": true,
+    "all-outputs": true,
+    "format": "{name}·"
+}
+```
+
 ## Notes
 
 - Firefox and Spotify require 1.5s initialization delay
@@ -96,6 +107,3 @@ swaymsg reload
 - Landing workspace: WS5 (configurable in `init-workspaces.sh`)
 - No automatic window assignments to avoid conflicts
 
-## License
-
-MIT
