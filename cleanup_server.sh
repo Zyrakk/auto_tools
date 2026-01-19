@@ -384,6 +384,14 @@ update_and_cleanup_system() {
         # Debian/Ubuntu/Raspberry Pi OS
         log_info "Sistema basado en APT detectado"
         
+        # Limpiar repositorios de Docker (ya no se necesitan tras cleanup)
+        if [[ -f /etc/apt/sources.list.d/docker.list ]] || ls /etc/apt/sources.list.d/docker*.list &>/dev/null; then
+            log_info "Eliminando repositorios de Docker..."
+            run_cmd "rm -f /etc/apt/sources.list.d/docker*.list"
+            run_cmd "rm -f /etc/apt/keyrings/docker*.gpg"
+            run_cmd "rm -f /usr/share/keyrings/docker*.gpg"
+        fi
+        
         # Actualizar repositorios
         log_info "Actualizando repositorios..."
         run_cmd "apt-get update"
@@ -510,7 +518,7 @@ final_report() {
 main() {
     echo ""
     echo "╔════════════════════════════════════════════════════════════╗"
-    echo "║           ZCLOUD CLEANUP SCRIPT v1.1                       ║"
+    echo "║           ZCLOUD CLEANUP SCRIPT v1.2                       ║"
     echo "╚════════════════════════════════════════════════════════════╝"
     echo ""
     
