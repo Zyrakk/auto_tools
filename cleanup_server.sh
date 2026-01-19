@@ -411,9 +411,10 @@ update_and_cleanup_system() {
         
         # Limpiar configuraciones residuales de paquetes eliminados
         log_info "Limpiando configuraciones residuales..."
-        RESIDUAL=$(dpkg -l | grep '^rc' | awk '{print $2}' || true)
-        if [[ -n "$RESIDUAL" ]]; then
-            run_cmd "dpkg --purge $RESIDUAL 2>/dev/null || true"
+        if dpkg -l | grep -q '^rc'; then
+            run_cmd "dpkg -l | grep '^rc' | awk '{print \$2}' | xargs -r dpkg --purge 2>/dev/null || true"
+        else
+            log_info "No hay configuraciones residuales"
         fi
         
     elif command -v dnf &> /dev/null; then
