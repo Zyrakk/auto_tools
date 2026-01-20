@@ -404,11 +404,11 @@ echo -e "${CYAN}╚════════════════════�
 echo ""
 
 echo -e "${YELLOW}Logical Volumes:${NC}"
-lvs vg_das --units g -o lv_name,lv_size 2>/dev/null || echo "  Error al leer LVs"
+sudo lvs vg_das --units g -o lv_name,lv_size 2>/dev/null || echo "  Error al leer LVs (¿ejecutar con sudo?)"
 echo ""
 
 echo -e "${YELLOW}Espacio libre en VG (para expansión):${NC}"
-vgs vg_das --units g -o vg_free 2>/dev/null | tail -1 | xargs echo " "
+sudo vgs vg_das --units t -o vg_free --noheadings 2>/dev/null | xargs echo " " || echo "  N/A"
 echo ""
 
 echo -e "${YELLOW}Uso de disco:${NC}"
@@ -418,9 +418,9 @@ done
 echo ""
 
 echo -e "${YELLOW}NFS Exports:${NC}"
-exportfs -v 2>/dev/null | while read line; do
+cat /etc/exports 2>/dev/null | grep -v "^#" | grep -v "^$" | while read line; do
     echo "  $line"
-done
+done || echo "  Ninguno"
 echo ""
 
 echo -e "${YELLOW}NFS Server Status:${NC}"
