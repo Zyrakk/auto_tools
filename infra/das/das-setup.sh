@@ -9,9 +9,8 @@
 #   lv_oracle1  (5TB)   → /mnt/nfs/oracle1  → Export NFS para Oracle 1
 #   lv_oracle2  (5TB)   → /mnt/nfs/oracle2  → Export NFS para Oracle 2
 #   lv_local    (4TB)   → /mnt/local        → Almacenamiento local Pi
-#   lv_shared   (4TB)   → /mnt/nfs/shared   → Export NFS compartido
-#   lv_temp     (4TB)   → /mnt/nfs/temp     → Export NFS temporal
-#   [libre]     (~2TB)  → Reserva para expansión
+#   lv_shared   (4TB)   → /mnt/nfs/shared   → Export NFS compartido (transferencias)
+#   [libre]     (~3.8TB)→ Reserva para expansión futura
 #
 #   NVMe (477GB) → /mnt/nvme → Almacenamiento rápido local
 #===============================================================================
@@ -32,13 +31,11 @@ NVME_DEVICE="/dev/nvme0n1"
 NVME_PARTITION="${NVME_DEVICE}p1"
 
 # Estructura de volúmenes: nombre|tamaño|punto_montaje|es_nfs_export
-# Tamaños en TB (T) o GB (G)
 declare -A VOLUMES=(
     ["lv_oracle1"]="5T|/mnt/nfs/oracle1|yes"
     ["lv_oracle2"]="5T|/mnt/nfs/oracle2|yes"
     ["lv_local"]="4T|/mnt/local|no"
     ["lv_shared"]="4T|/mnt/nfs/shared|yes"
-    ["lv_temp"]="4T|/mnt/nfs/temp|yes"
 )
 
 # Red VPN para NFS exports
@@ -145,7 +142,9 @@ create_logical_volumes() {
         fi
         
         log_info "Creando $lv_name (${size})..."
-        lvcreate -L "$size" -n "$lv_name" "$VG_NAME"
+        # -y para auto-confirmar si detecta firmas previas
+        # -W y para auto-confirmar wipe
+        lvcreate -y -W y -L "$size" -n "$lv_name" "$VG_NAME"
         log_ok "Creado: $lv_name"
     done
     
@@ -168,7 +167,7 @@ format_volumes() {
         fi
         
         log_info "Formateando $lv_name..."
-        mkfs.ext4 -L "$lv_name" "$LV_PATH"
+        mkfs.ext4 -F -L "$lv_name" "$LV_PATH"
         log_ok "Formateado: $lv_name"
     done
     
@@ -198,7 +197,8 @@ setup_nvme() {
             sleep 1
             
             if [[ ! -b "$NVME_PARTITION" ]]; then
-                log_error "No se pudo crear la partición NVMe"
+                log_warn "No se pudo crear la partición NVMe, continuando sin NVMe..."
+                return 0
             fi
         else
             log_warn "No se encontró dispositivo NVMe, saltando..."
@@ -209,7 +209,7 @@ setup_nvme() {
     # Verificar si ya tiene filesystem
     if ! blkid "$NVME_PARTITION" &>/dev/null; then
         log_info "Formateando NVMe..."
-        mkfs.ext4 -L nvme_fast "$NVME_PARTITION"
+        mkfs.ext4 -F -L nvme_fast "$NVME_PARTITION"
     else
         log_info "NVMe ya tiene filesystem"
     fi
@@ -230,7 +230,6 @@ create_mount_points() {
     mkdir -p /mnt/nfs/oracle1
     mkdir -p /mnt/nfs/oracle2
     mkdir -p /mnt/nfs/shared
-    mkdir -p /mnt/nfs/temp
     mkdir -p /mnt/local
     mkdir -p /mnt/nvme
     
@@ -333,11 +332,8 @@ configure_nfs() {
 # Oracle 2 - Almacenamiento dedicado (5TB)
 /mnt/nfs/oracle2    ${VPN_NETWORK}(rw,sync,no_subtree_check,no_root_squash)
 
-# Shared - Almacenamiento compartido (4TB)
+# Shared - Almacenamiento compartido para transferencias (4TB)
 /mnt/nfs/shared     ${VPN_NETWORK}(rw,sync,no_subtree_check,no_root_squash)
-
-# Temp - Almacenamiento temporal (4TB)
-/mnt/nfs/temp       ${VPN_NETWORK}(rw,sync,no_subtree_check,no_root_squash)
 
 EOF
 
@@ -345,7 +341,7 @@ EOF
     
     # Establecer permisos en directorios NFS
     log_info "Configurando permisos..."
-    for dir in /mnt/nfs/oracle1 /mnt/nfs/oracle2 /mnt/nfs/shared /mnt/nfs/temp; do
+    for dir in /mnt/nfs/oracle1 /mnt/nfs/oracle2 /mnt/nfs/shared; do
         chown nobody:nogroup "$dir"
         chmod 777 "$dir"
     done
@@ -398,6 +394,7 @@ create_status_script() {
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+RED='\033[0;31m'
 NC='\033[0m'
 
 echo ""
@@ -407,7 +404,11 @@ echo -e "${CYAN}╚════════════════════�
 echo ""
 
 echo -e "${YELLOW}Logical Volumes:${NC}"
-lvs vg_das --units g -o lv_name,lv_size,data_percent 2>/dev/null || echo "  Error al leer LVs"
+lvs vg_das --units g -o lv_name,lv_size 2>/dev/null || echo "  Error al leer LVs"
+echo ""
+
+echo -e "${YELLOW}Espacio libre en VG (para expansión):${NC}"
+vgs vg_das --units g -o vg_free 2>/dev/null | tail -1 | xargs echo " "
 echo ""
 
 echo -e "${YELLOW}Uso de disco:${NC}"
@@ -426,15 +427,19 @@ echo -e "${YELLOW}NFS Server Status:${NC}"
 if systemctl is-active --quiet nfs-kernel-server; then
     echo -e "  ${GREEN}● Activo${NC}"
 else
-    echo -e "  ○ Inactivo"
+    echo -e "  ${RED}○ Inactivo${NC}"
 fi
 echo ""
 
 echo -e "${YELLOW}Clientes NFS conectados:${NC}"
-ss -tn state established '( dport = :2049 or sport = :2049 )' 2>/dev/null | tail -n +2 | while read line; do
-    echo "  $line"
-done
-[[ $(ss -tn state established '( dport = :2049 or sport = :2049 )' 2>/dev/null | wc -l) -le 1 ]] && echo "  (ninguno)"
+CLIENTS=$(ss -tn state established '( dport = :2049 or sport = :2049 )' 2>/dev/null | tail -n +2)
+if [[ -n "$CLIENTS" ]]; then
+    echo "$CLIENTS" | while read line; do
+        echo "  $line"
+    done
+else
+    echo "  (ninguno)"
+fi
 echo ""
 EOF
 
@@ -457,7 +462,7 @@ final_report() {
     echo ""
     
     echo -e "${YELLOW}Espacio libre en VG (para expansión futura):${NC}"
-    vgs "$VG_NAME" --units g -o vg_free
+    vgs "$VG_NAME" --units t -o vg_free
     echo ""
     
     echo -e "${YELLOW}Puntos de montaje:${NC}"
@@ -474,8 +479,9 @@ final_report() {
     echo ""
     echo "  das-status              Ver estado del DAS"
     echo "  exportfs -v             Ver exports NFS"
+    echo ""
+    echo "  # Expandir un volumen (ejemplo +1TB a oracle1):"
     echo "  lvextend -L +1T vg_das/lv_oracle1 && resize2fs /dev/vg_das/lv_oracle1"
-    echo "                          Expandir un volumen (ejemplo +1TB)"
     echo ""
     
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -493,6 +499,9 @@ final_report() {
     echo "  sudo mount -t nfs 10.10.0.2:/mnt/nfs/oracle2 /mnt/das"
     echo "  # Añadir a /etc/fstab para montaje permanente:"
     echo "  echo '10.10.0.2:/mnt/nfs/oracle2 /mnt/das nfs defaults,_netdev 0 0' | sudo tee -a /etc/fstab"
+    echo ""
+    echo "Para acceder al volumen compartido desde cualquier nodo:"
+    echo "  sudo mount -t nfs 10.10.0.2:/mnt/nfs/shared /mnt/shared"
     echo ""
 }
 

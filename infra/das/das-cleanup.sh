@@ -1,7 +1,8 @@
 #!/bin/bash
 #===============================================================================
-# DAS CLEANUP SCRIPT
-# Limpia completamente el DAS: desmonta, elimina LVs y prepara para nueva config
+# DAS CLEANUP SCRIPT (Universal)
+# Limpia completamente el DAS: desmonta, elimina TODOS los LVs y prepara para
+# nueva configuración. Funciona con cualquier estructura existente.
 #
 # USO: sudo ./das-cleanup.sh [--force]
 #===============================================================================
@@ -15,6 +16,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
+
+# Configuración
+VG_NAME="vg_das"
 
 FORCE=false
 [[ "${1:-}" == "--force" ]] && FORCE=true
@@ -40,24 +44,45 @@ show_current_state() {
     echo -e "${CYAN}════════════════════════════════════════════════════════════════${NC}"
     echo ""
     
-    echo -e "${YELLOW}Logical Volumes:${NC}"
-    lvs vg_das 2>/dev/null || echo "  No hay LVs en vg_das"
-    echo ""
+    # Verificar si existe el VG
+    if ! vgs "$VG_NAME" &>/dev/null; then
+        log_error "Volume Group '$VG_NAME' no encontrado"
+    fi
     
     echo -e "${YELLOW}Volume Group:${NC}"
-    vgs vg_das 2>/dev/null || echo "  No existe vg_das"
+    vgs "$VG_NAME" 2>/dev/null || echo "  No existe $VG_NAME"
     echo ""
     
-    echo -e "${YELLOW}Puntos de montaje actuales:${NC}"
-    mount | grep vg_das || echo "  Ninguno montado"
+    echo -e "${YELLOW}Logical Volumes en $VG_NAME:${NC}"
+    if lvs "$VG_NAME" --noheadings 2>/dev/null | grep -q .; then
+        lvs "$VG_NAME" 2>/dev/null
+    else
+        echo "  Ninguno"
+    fi
     echo ""
     
-    echo -e "${YELLOW}Entradas en /etc/fstab:${NC}"
-    grep -E "vg_das|/mnt/das|/mnt/chat-ai|/mnt/nfs" /etc/fstab 2>/dev/null || echo "  Ninguna encontrada"
+    echo -e "${YELLOW}Puntos de montaje de $VG_NAME:${NC}"
+    if mount | grep -q "$VG_NAME"; then
+        mount | grep "$VG_NAME"
+    else
+        echo "  Ninguno montado"
+    fi
+    echo ""
+    
+    echo -e "${YELLOW}Entradas en /etc/fstab relacionadas:${NC}"
+    if grep -qE "$VG_NAME|/mnt/nfs|/mnt/local|/mnt/das|/mnt/chat" /etc/fstab 2>/dev/null; then
+        grep -E "$VG_NAME|/mnt/nfs|/mnt/local|/mnt/das|/mnt/chat" /etc/fstab
+    else
+        echo "  Ninguna encontrada"
+    fi
     echo ""
     
     echo -e "${YELLOW}Exports NFS actuales:${NC}"
-    cat /etc/exports 2>/dev/null | grep -v "^#" | grep -v "^$" || echo "  Ninguno"
+    if [[ -f /etc/exports ]] && grep -vE "^#|^$" /etc/exports | grep -q .; then
+        grep -vE "^#|^$" /etc/exports
+    else
+        echo "  Ninguno"
+    fi
     echo ""
 }
 
@@ -135,37 +160,35 @@ EOF
 }
 
 #===============================================================================
-# DESMONTAR VOLÚMENES
+# DESMONTAR VOLÚMENES (Universal)
 #===============================================================================
 unmount_volumes() {
-    log_info "Desmontando volúmenes..."
+    log_info "Desmontando todos los volúmenes de $VG_NAME..."
     
-    # Lista de posibles puntos de montaje
-    MOUNT_POINTS=(
-        "/mnt/das"
-        "/mnt/chat-ai"
-        "/mnt/nfs/oracle1"
-        "/mnt/nfs/oracle2"
-        "/mnt/nfs/shared"
-        "/mnt/nfs/temp"
-        "/mnt/local"
-    )
+    # Obtener todos los puntos de montaje del VG
+    MOUNTED=$(mount | grep "/dev/mapper/${VG_NAME}" | awk '{print $3}' || true)
     
-    for mp in "${MOUNT_POINTS[@]}"; do
-        if mountpoint -q "$mp" 2>/dev/null; then
-            log_info "Desmontando $mp..."
-            
-            # Matar procesos que usen el mount
-            fuser -km "$mp" 2>/dev/null || true
-            sleep 1
-            
-            umount -f "$mp" 2>/dev/null || umount -l "$mp" 2>/dev/null || true
+    if [[ -z "$MOUNTED" ]]; then
+        log_info "No hay volúmenes montados de $VG_NAME"
+        return 0
+    fi
+    
+    for mp in $MOUNTED; do
+        log_info "Desmontando $mp..."
+        
+        # Matar procesos que usen el mount
+        fuser -km "$mp" 2>/dev/null || true
+        sleep 1
+        
+        if umount -f "$mp" 2>/dev/null || umount -l "$mp" 2>/dev/null; then
             log_ok "Desmontado: $mp"
+        else
+            log_warn "No se pudo desmontar: $mp"
         fi
     done
     
-    # Desmontar cualquier cosa de vg_das que quede
-    for lv_path in /dev/vg_das/*; do
+    # Intentar desmontar por dispositivo directamente
+    for lv_path in /dev/${VG_NAME}/*; do
         if [[ -e "$lv_path" ]]; then
             mp=$(findmnt -n -o TARGET "$lv_path" 2>/dev/null || true)
             if [[ -n "$mp" ]]; then
@@ -180,28 +203,34 @@ unmount_volumes() {
 }
 
 #===============================================================================
-# LIMPIAR FSTAB
+# LIMPIAR FSTAB (Universal)
 #===============================================================================
 cleanup_fstab() {
     log_info "Limpiando /etc/fstab..."
     
+    # Verificar si hay entradas que limpiar
+    if ! grep -qE "$VG_NAME|/mnt/nfs|/mnt/local|/mnt/das|/mnt/chat" /etc/fstab 2>/dev/null; then
+        log_info "No hay entradas relacionadas en fstab"
+        return 0
+    fi
+    
     cp /etc/fstab /etc/fstab.backup.$(date +%Y%m%d%H%M%S)
     
-    # Eliminar entradas relacionadas con vg_das y nuestros puntos de montaje
-    grep -vE "vg_das|/mnt/das|/mnt/chat-ai|/mnt/nfs/oracle|/mnt/nfs/shared|/mnt/nfs/temp|/mnt/local" /etc/fstab > /etc/fstab.tmp
+    # Eliminar todas las entradas relacionadas con el VG y nuestros puntos de montaje
+    grep -vE "$VG_NAME|/mnt/nfs|/mnt/local|/mnt/das|/mnt/chat" /etc/fstab > /etc/fstab.tmp || true
     mv /etc/fstab.tmp /etc/fstab
     
     log_ok "fstab limpiado (backup creado)"
 }
 
 #===============================================================================
-# ELIMINAR LOGICAL VOLUMES
+# ELIMINAR LOGICAL VOLUMES (Universal)
 #===============================================================================
 remove_logical_volumes() {
-    log_info "Eliminando Logical Volumes..."
+    log_info "Eliminando todos los Logical Volumes de $VG_NAME..."
     
-    # Obtener lista de LVs en vg_das
-    LVS=$(lvs --noheadings -o lv_name vg_das 2>/dev/null | tr -d ' ' || true)
+    # Obtener lista de LVs en el VG
+    LVS=$(lvs --noheadings -o lv_name "$VG_NAME" 2>/dev/null | tr -d ' ' || true)
     
     if [[ -z "$LVS" ]]; then
         log_info "No hay Logical Volumes que eliminar"
@@ -212,34 +241,37 @@ remove_logical_volumes() {
         log_info "Eliminando LV: $lv"
         
         # Desactivar primero
-        lvchange -an "vg_das/$lv" 2>/dev/null || true
+        lvchange -an "${VG_NAME}/$lv" 2>/dev/null || true
         
-        # Eliminar
-        lvremove -f "vg_das/$lv"
-        
-        log_ok "Eliminado: $lv"
+        # Eliminar con -y para auto-confirmar
+        if lvremove -y -f "${VG_NAME}/$lv" 2>/dev/null; then
+            log_ok "Eliminado: $lv"
+        else
+            log_warn "No se pudo eliminar: $lv"
+        fi
     done
     
-    log_ok "Todos los Logical Volumes eliminados"
+    log_ok "Logical Volumes eliminados"
 }
 
 #===============================================================================
-# LIMPIAR DIRECTORIOS
+# LIMPIAR DIRECTORIOS (Universal)
 #===============================================================================
 cleanup_directories() {
     log_info "Limpiando directorios de montaje..."
     
-    DIRS_TO_CLEAN=(
-        "/mnt/das"
-        "/mnt/chat-ai"
+    # Directorios que podrían existir
+    DIRS_TO_CHECK=(
         "/mnt/nfs"
         "/mnt/local"
+        "/mnt/das"
+        "/mnt/chat-ai"
     )
     
-    for dir in "${DIRS_TO_CLEAN[@]}"; do
+    for dir in "${DIRS_TO_CHECK[@]}"; do
         if [[ -d "$dir" ]]; then
             # Verificar que no esté montado
-            if ! mountpoint -q "$dir" 2>/dev/null; then
+            if ! mountpoint -q "$dir" 2>/dev/null && ! mount | grep -q " $dir "; then
                 rm -rf "$dir"
                 log_ok "Eliminado: $dir"
             else
@@ -260,15 +292,15 @@ final_report() {
     echo ""
     
     echo -e "${YELLOW}Estado del Volume Group:${NC}"
-    vgs vg_das 2>/dev/null || echo "  No existe"
+    vgs "$VG_NAME" 2>/dev/null || echo "  No existe"
     echo ""
     
     echo -e "${YELLOW}Physical Volumes:${NC}"
-    pvs 2>/dev/null | grep -E "PV|vg_das" || echo "  Ninguno"
+    pvs 2>/dev/null | grep -E "PV|$VG_NAME" || echo "  Ninguno"
     echo ""
     
-    echo -e "${YELLOW}Espacio disponible:${NC}"
-    vgs --noheadings -o vg_free vg_das 2>/dev/null | xargs echo "  " || echo "  N/A"
+    echo -e "${YELLOW}Espacio total disponible:${NC}"
+    vgs --noheadings -o vg_free "$VG_NAME" 2>/dev/null | xargs echo "  " || echo "  N/A"
     echo ""
     
     echo "Próximo paso:"
