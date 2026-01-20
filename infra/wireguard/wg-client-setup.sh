@@ -129,13 +129,6 @@ enable_service() {
 verify_connection() {
     log_info "Verificando conexión con el servidor..."
     
-    # Obtener IP del servidor de la config
-    SERVER_IP=$(grep -A5 "\[Peer\]" "${WG_DIR}/${WG_INTERFACE}.conf" | grep "AllowedIPs" | head -1 | grep -oE "10\.10\.0\.[0-9]+" | head -1)
-    
-    if [[ -z "$SERVER_IP" ]]; then
-        SERVER_IP="10.10.0.1"
-    fi
-    
     echo ""
     if ping -c 3 -W 2 10.10.0.1 &>/dev/null; then
         echo -e "${GREEN}✅ Conexión exitosa con el servidor (10.10.0.1)${NC}"
@@ -149,6 +142,8 @@ verify_connection() {
         echo ""
         echo "Verifica con: wg show"
     fi
+    
+    return 0
 }
 
 #===============================================================================
