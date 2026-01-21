@@ -379,7 +379,7 @@ echo ""
 # Mostrar QR si es posible (útil para móviles)
 if command -v qrencode &>/dev/null; then
     echo -e "${YELLOW}QR Code (para apps móviles WireGuard):${NC}"
-    qrencode -t ansiutf8 < "$PEER_CONF"
+    qrencode -t ansiutf8 -m 2 -s 1 < "$PEER_CONF"
 fi
 SCRIPT_EOF
 
