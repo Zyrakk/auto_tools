@@ -57,11 +57,11 @@ check_cluster() {
 check_all_nodes_ready() {
     log_info "Verificando que todos los nodos estén Ready..."
     
-    NOT_READY=$(kubectl get nodes --no-headers 2>/dev/null | grep -v "Ready" | wc -l)
+    NOT_READY=$(kubectl get nodes --no-headers 2>/dev/null | grep -v "Ready" | wc -l || echo "0")
     
-    if [[ $NOT_READY -gt 0 ]]; then
+    if [[ "$NOT_READY" -gt 0 ]]; then
         log_warn "Hay nodos que no están Ready:"
-        kubectl get nodes | grep -v "Ready"
+        kubectl get nodes | grep -v "Ready" || true
         echo ""
         read -p "¿Continuar de todas formas? (y/N): " response
         if [[ ! "$response" =~ ^[Yy]$ ]]; then
@@ -83,39 +83,35 @@ label_nodes() {
     
     for node in $NODES; do
         case "$node" in
-            *raspberry*|*raspi*|*pi*)
+            raspberry*|raspi*|pi*)
                 log_info "Etiquetando $node como storage (Raspberry)"
                 kubectl label node "$node" role=storage --overwrite
                 kubectl label node "$node" node-role.kubernetes.io/worker=true --overwrite
                 kubectl label node "$node" storage-type=hdd --overwrite
                 ;;
-            *oracle1*|*oci1*)
+            oracle1*|oci1*)
                 log_info "Etiquetando $node como compute (Oracle 1)"
                 kubectl label node "$node" role=compute --overwrite
                 kubectl label node "$node" node-role.kubernetes.io/worker=true --overwrite
                 kubectl label node "$node" oracle-node=oci1 --overwrite
                 ;;
-            *oracle2*|*oci2*)
+            oracle2*|oci2*)
                 log_info "Etiquetando $node como compute (Oracle 2)"
                 kubectl label node "$node" role=compute --overwrite
                 kubectl label node "$node" node-role.kubernetes.io/worker=true --overwrite
                 kubectl label node "$node" oracle-node=oci2 --overwrite
                 ;;
+            lake*|n150*)
+                log_info "Etiquetando $node como control-plane"
+                kubectl label node "$node" role=control-plane --overwrite
+                ;;
             *)
-                # Probablemente es el control plane
-                if kubectl get node "$node" -o jsonpath='{.spec.taints}' 2>/dev/null | grep -q "control-plane"; then
-                    log_info "$node es control-plane, saltando..."
-                else
-                    log_info "Etiquetando $node como worker genérico"
-                    kubectl label node "$node" node-role.kubernetes.io/worker=true --overwrite
-                fi
+                log_info "Nodo $node sin etiqueta específica, saltando..."
                 ;;
         esac
     done
     
     log_ok "Nodos etiquetados"
-    echo ""
-    kubectl get nodes --show-labels
 }
 
 #===============================================================================
@@ -173,95 +169,15 @@ install_nfs_provisioner() {
 # CREAR STORAGE CLASSES ADICIONALES
 #===============================================================================
 create_storage_classes() {
-    log_info "Creando StorageClasses adicionales..."
+    log_info "Configurando StorageClasses..."
     
-    # StorageClass para Oracle 1
-    cat <<EOF | kubectl apply -f -
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: nfs-oracle1
-provisioner: cluster.local/nfs-shared
-parameters:
-  pathPattern: "\${.PVC.namespace}/\${.PVC.name}"
-  onDelete: retain
-reclaimPolicy: Retain
-volumeBindingMode: Immediate
-allowVolumeExpansion: true
-EOF
-
-    # StorageClass para Oracle 2
-    cat <<EOF | kubectl apply -f -
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: nfs-oracle2
-provisioner: cluster.local/nfs-shared
-parameters:
-  pathPattern: "\${.PVC.namespace}/\${.PVC.name}"
-  onDelete: retain
-reclaimPolicy: Retain
-volumeBindingMode: Immediate
-allowVolumeExpansion: true
-EOF
-
-    # StorageClass para almacenamiento local rápido (NVMe en Raspberry)
-    cat <<EOF | kubectl apply -f -
-apiVersion: storage.k8s.io/v1
-kind: StorageClass
-metadata:
-  name: local-nvme
-provisioner: rancher.io/local-path
-reclaimPolicy: Delete
-volumeBindingMode: WaitForFirstConsumer
-EOF
-
-    log_ok "StorageClasses creadas"
-}
-
-#===============================================================================
-# CONFIGURAR LOCAL PATH PROVISIONER
-#===============================================================================
-configure_local_path() {
-    log_info "Configurando Local Path Provisioner para NVMe..."
+    # Marcar nfs-shared como default (ya lo hace helm, pero por si acaso)
+    kubectl patch storageclass nfs-shared -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}' 2>/dev/null || true
     
-    # Actualizar configmap para usar /mnt/nvme en la Raspberry
-    cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: local-path-config
-  namespace: kube-system
-data:
-  config.json: |-
-    {
-      "nodePathMap": [
-        {
-          "node": "DEFAULT_PATH_FOR_NON_LISTED_NODES",
-          "paths": ["/mnt/das"]
-        },
-        {
-          "node": "raspberry",
-          "paths": ["/mnt/nvme/k3s-local"]
-        }
-      ]
-    }
-  helperPod.yaml: |-
-    apiVersion: v1
-    kind: Pod
-    metadata:
-      name: helper-pod
-    spec:
-      containers:
-      - name: helper-pod
-        image: busybox
-        imagePullPolicy: IfNotPresent
-EOF
-
-    # Reiniciar local-path-provisioner para que tome la nueva config
-    kubectl rollout restart deployment local-path-provisioner -n kube-system 2>/dev/null || true
+    # Marcar local-path como no-default
+    kubectl patch storageclass local-path -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"false"}}}' 2>/dev/null || true
     
-    log_ok "Local Path Provisioner configurado"
+    log_ok "StorageClasses configuradas"
 }
 
 #===============================================================================
@@ -271,16 +187,16 @@ verify_installation() {
     log_info "Verificando instalación..."
     
     echo ""
-    echo -e "${YELLOW}Nodos y labels:${NC}"
-    kubectl get nodes -o custom-columns="NAME:.metadata.name,STATUS:.status.conditions[-1].type,ROLE:.metadata.labels.role,STORAGE:.metadata.labels.storage-type"
+    echo -e "${YELLOW}Nodos y roles:${NC}"
+    kubectl get nodes -o custom-columns="NAME:.metadata.name,STATUS:.status.conditions[-1].type,ROLE:.metadata.labels.role" || true
     echo ""
     
     echo -e "${YELLOW}StorageClasses:${NC}"
-    kubectl get storageclass
+    kubectl get storageclass || true
     echo ""
     
     echo -e "${YELLOW}Pods del provisioner:${NC}"
-    kubectl get pods -n nfs-provisioner
+    kubectl get pods -n nfs-provisioner || true
     echo ""
 }
 
@@ -305,18 +221,24 @@ spec:
       storage: 100Mi
 EOF
 
-    sleep 5
+    sleep 10
     
     echo ""
     echo -e "${YELLOW}Estado del PVC de prueba:${NC}"
     kubectl get pvc test-nfs-pvc
-    echo ""
     
-    read -p "¿Eliminar PVC de prueba? (Y/n): " response
-    if [[ ! "$response" =~ ^[Nn]$ ]]; then
-        kubectl delete pvc test-nfs-pvc
-        log_ok "PVC de prueba eliminado"
+    PVC_STATUS=$(kubectl get pvc test-nfs-pvc -o jsonpath='{.status.phase}' 2>/dev/null || echo "Unknown")
+    
+    if [[ "$PVC_STATUS" == "Bound" ]]; then
+        log_ok "PVC de prueba creado y vinculado correctamente"
+    else
+        log_warn "PVC en estado: $PVC_STATUS (puede tardar unos segundos)"
     fi
+    
+    echo ""
+    # Eliminar PVC de prueba automáticamente
+    kubectl delete pvc test-nfs-pvc --ignore-not-found
+    log_ok "PVC de prueba eliminado"
 }
 
 #===============================================================================
@@ -330,46 +252,28 @@ final_report() {
     echo ""
     
     echo -e "${YELLOW}Resumen del cluster:${NC}"
-    kubectl get nodes -o wide
+    kubectl get nodes -o custom-columns="NAME:.metadata.name,STATUS:.status.conditions[-1].type,ROLE:.metadata.labels.role"
     echo ""
     
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${CYAN}STORAGE CLASSES DISPONIBLES:${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo ""
-    echo "  nfs-shared (default)  → Volumen compartido en Raspberry (4TB)"
-    echo "  nfs-oracle1           → Volumen dedicado Oracle 1 (5TB)"
-    echo "  nfs-oracle2           → Volumen dedicado Oracle 2 (5TB)"
-    echo "  local-nvme            → NVMe local en Raspberry (477GB)"
-    echo "  local-path            → Local path provisioner (default k3s)"
+    kubectl get storageclass
     echo ""
     
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${CYAN}EJEMPLOS DE USO:${NC}"
+    echo -e "${CYAN}EJEMPLO - Desplegar en nodos compute (Oracle):${NC}"
     echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
-    echo "# PVC con almacenamiento compartido NFS:"
-    echo "---"
-    echo "apiVersion: v1"
-    echo "kind: PersistentVolumeClaim"
-    echo "metadata:"
-    echo "  name: mi-pvc"
-    echo "spec:"
-    echo "  accessModes:"
-    echo "    - ReadWriteMany"
-    echo "  storageClassName: nfs-shared"
-    echo "  resources:"
-    echo "    requests:"
-    echo "      storage: 10Gi"
-    echo ""
-    echo "# Pod en nodos de compute (Oracle):"
-    echo "---"
     echo "spec:"
     echo "  nodeSelector:"
     echo "    role: compute"
     echo ""
-    echo "# Pod en nodo de storage (Raspberry):"
-    echo "---"
+    
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}EJEMPLO - Desplegar en nodo storage (Raspberry):${NC}"
+    echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo ""
     echo "spec:"
     echo "  nodeSelector:"
     echo "    role: storage"
@@ -394,7 +298,6 @@ main() {
     create_storage_namespace
     install_nfs_provisioner
     create_storage_classes
-    configure_local_path
     verify_installation
     test_storage
     final_report
