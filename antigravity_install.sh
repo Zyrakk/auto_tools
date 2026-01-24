@@ -7,8 +7,6 @@ if command -v distrobox &> /dev/null; then
     echo "✓ distrobox instalado: $(distrobox version)"
 else
     echo "✗ distrobox no encontrado"
-    echo "Instala distrobox con: rpm-ostree install distrobox"
-    echo "Luego reinicia: systemctl reboot"
     exit 1
 fi
 
@@ -21,8 +19,8 @@ else
     echo "✓ Contenedor creado"
 fi
 
-# Instalar Antigravity dentro del contenedor
-echo -e "\n=== Instalando Antigravity ==="
+# Instalar Antigravity y dependencias dentro del contenedor
+echo -e "\n=== Instalando Antigravity y dependencias ==="
 distrobox enter dev-tools -- bash -c '
     # Añadir repo
     sudo tee /etc/yum.repos.d/antigravity.repo > /dev/null << EOL
@@ -34,8 +32,8 @@ gpgcheck=0
 EOL
     
     sudo dnf makecache -y
-    sudo dnf install -y antigravity
-    echo "✓ Antigravity instalado"
+    sudo dnf install -y antigravity git
+    echo "✓ Antigravity y git instalados"
 '
 
 # Exportar al host
