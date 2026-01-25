@@ -7,7 +7,6 @@ data:
   prometheus.yml: |
     global:
       scrape_interval: 30s
-      evaluation_interval: 30s
 
     scrape_configs:
       # Métricas de Node Exporter (todos los nodos)
