@@ -9,20 +9,17 @@ data:
       scrape_interval: 30s
 
     scrape_configs:
-      # Métricas de Node Exporter (todos los nodos)
+      # Métricas de Node Exporter (todos los nodos via role: node)
       - job_name: 'node-exporter'
         kubernetes_sd_configs:
-          - role: pod
+          - role: node
         relabel_configs:
-          - source_labels: [__meta_kubernetes_pod_label_app]
-            regex: node-exporter
-            action: keep
-          - source_labels: [__meta_kubernetes_pod_node_name]
+          - source_labels: [__meta_kubernetes_node_name]
             target_label: node
-          - source_labels: [__meta_kubernetes_pod_host_ip]
+          - source_labels: [__meta_kubernetes_node_name]
             target_label: instance
-            replacement: '${1}:9100'
-          - source_labels: [__meta_kubernetes_pod_host_ip]
+          - source_labels: [__address__]
+            regex: '(.+):\d+'
             target_label: __address__
             replacement: '${1}:9100'
 
