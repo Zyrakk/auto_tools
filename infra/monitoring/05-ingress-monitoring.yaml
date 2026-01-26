@@ -1,0 +1,41 @@
+# Ingress para servicios de monitoring
+# Requiere: Traefik instalado y DNS configurado
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: grafana.zyrak.cloud
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
+---
+# Opcional: VictoriaMetrics UI
+# apiVersion: networking.k8s.io/v1
+# kind: Ingress
+# metadata:
+#   name: victoriametrics
+#   namespace: monitoring
+# spec:
+#   ingressClassName: traefik
+#   rules:
+#     - host: metrics.zyrak.cloud
+#       http:
+#         paths:
+#           - path: /
+#             pathType: Prefix
+#             backend:
+#               service:
+#                 name: victoriametrics
+#                 port:
+#                   number: 8428
