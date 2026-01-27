@@ -68,6 +68,12 @@ rules:
     resources:
       - endpointslices
     verbs: ["list", "watch"]
+  # NEW in v2.17.0: Webhook configurations
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources:
+      - mutatingwebhookconfigurations
+      - validatingwebhookconfigurations
+    verbs: ["list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -119,16 +125,17 @@ spec:
             limits:
               cpu: 200m
               memory: 256Mi
+          # NOTE: In v2.17.0, health endpoints are on the telemetry port (8081)
           livenessProbe:
             httpGet:
               path: /livez
-              port: 8080
+              port: 8081
             initialDelaySeconds: 5
             periodSeconds: 10
           readinessProbe:
             httpGet:
               path: /readyz
-              port: 8080
+              port: 8081
             initialDelaySeconds: 5
             periodSeconds: 10
 ---
