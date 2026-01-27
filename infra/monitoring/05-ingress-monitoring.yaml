@@ -1,13 +1,19 @@
-# Ingress para servicios de monitoring
-# Requiere: Traefik instalado y DNS configurado
+# Ingress para servicios de monitoring con HTTPS
+# Requiere: Traefik instalado, DNS configurado, cert-manager y ClusterIssuer
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: grafana
   namespace: monitoring
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
   ingressClassName: traefik
+  tls:
+    - hosts:
+        - grafana.zyrak.cloud
+      secretName: grafana-tls
   rules:
     - host: grafana.zyrak.cloud
       http:
@@ -20,14 +26,20 @@ spec:
                 port:
                   number: 3000
 ---
-# Opcional: VictoriaMetrics UI
+# Opcional: VictoriaMetrics UI con HTTPS
 # apiVersion: networking.k8s.io/v1
 # kind: Ingress
 # metadata:
 #   name: victoriametrics
 #   namespace: monitoring
+#   annotations:
+#     cert-manager.io/cluster-issuer: letsencrypt-prod
 # spec:
 #   ingressClassName: traefik
+#   tls:
+#     - hosts:
+#         - metrics.zyrak.cloud
+#       secretName: victoriametrics-tls
 #   rules:
 #     - host: metrics.zyrak.cloud
 #       http:

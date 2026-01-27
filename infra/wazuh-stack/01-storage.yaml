@@ -1,0 +1,66 @@
+---
+# PVC for Wazuh Indexer (OpenSearch) data
+# Stores security alerts, logs, and indices
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wazuh-indexer-data
+  namespace: wazuh
+  labels:
+    app: wazuh-indexer
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: nfs-shared
+  resources:
+    requests:
+      storage: 50Gi
+---
+# PVC for Wazuh Manager data
+# Stores agent info, rules, decoders, etc.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wazuh-manager-data
+  namespace: wazuh
+  labels:
+    app: wazuh-manager
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: nfs-shared
+  resources:
+    requests:
+      storage: 20Gi
+---
+# PVC for Wazuh Manager logs and queues
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wazuh-manager-logs
+  namespace: wazuh
+  labels:
+    app: wazuh-manager
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: nfs-shared
+  resources:
+    requests:
+      storage: 10Gi
+---
+# PVC for certificates (shared between components)
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wazuh-certs
+  namespace: wazuh
+  labels:
+    app: wazuh
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs-shared
+  resources:
+    requests:
+      storage: 1Gi
