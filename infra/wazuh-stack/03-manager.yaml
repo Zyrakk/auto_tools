@@ -264,15 +264,9 @@ spec:
       labels:
         app: wazuh-manager
     spec:
-      # Prefer control-plane node for manager
-      affinity:
-        nodeAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 50
-              preference:
-                matchExpressions:
-                  - key: node-role.kubernetes.io/control-plane
-                    operator: Exists
+      # Force x86 node (lake) - Wazuh doesn't have ARM images
+      nodeSelector:
+        kubernetes.io/hostname: lake
       
       initContainers:
         # Wait for indexer to be ready

@@ -89,19 +89,11 @@ spec:
       labels:
         app: wazuh-indexer
     spec:
-      # Prefer ARM nodes (oracle1/oracle2) for compute-heavy indexer
-      affinity:
-        nodeAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              preference:
-                matchExpressions:
-                  - key: kubernetes.io/arch
-                    operator: In
-                    values:
-                      - arm64
+      # Force x86 node (lake) - Wazuh doesn't have ARM images
+      nodeSelector:
+        kubernetes.io/hostname: lake
       
-      # Init container to generate certificates
+      # Init containers
       initContainers:
         - name: generate-certs
           image: alpine/openssl:latest
@@ -138,8 +130,9 @@ spec:
               value: "-Xms1g -Xmx1g"
             - name: bootstrap.memory_lock
               value: "false"
+            # Allow demo config to initialize security index on first boot
             - name: DISABLE_INSTALL_DEMO_CONFIG
-              value: "true"
+              value: "false"
           
           ports:
             - containerPort: 9200

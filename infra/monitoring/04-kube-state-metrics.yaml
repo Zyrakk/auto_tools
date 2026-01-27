@@ -63,12 +63,10 @@ rules:
     resources:
       - poddisruptionbudgets
     verbs: ["list", "watch"]
-  # NEW in v2.17.0: EndpointSlices support
   - apiGroups: ["discovery.k8s.io"]
     resources:
       - endpointslices
     verbs: ["list", "watch"]
-  # NEW in v2.17.0: Webhook configurations
   - apiGroups: ["admissionregistration.k8s.io"]
     resources:
       - mutatingwebhookconfigurations
@@ -108,7 +106,6 @@ spec:
       serviceAccountName: kube-state-metrics
       containers:
         - name: kube-state-metrics
-          # UPDATED: v2.10.1 -> v2.17.0
           image: registry.k8s.io/kube-state-metrics/kube-state-metrics:v2.17.0
           args:
             - --port=8080
@@ -125,17 +122,16 @@ spec:
             limits:
               cpu: 200m
               memory: 256Mi
-          # NOTE: In v2.17.0, health endpoints are on the telemetry port (8081)
           livenessProbe:
             httpGet:
-              path: /livez
-              port: 8081
+              path: /healthz
+              port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
           readinessProbe:
             httpGet:
-              path: /readyz
-              port: 8081
+              path: /healthz
+              port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
 ---

@@ -78,17 +78,9 @@ spec:
       labels:
         app: wazuh-dashboard
     spec:
-      # Prefer ARM nodes
-      affinity:
-        nodeAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              preference:
-                matchExpressions:
-                  - key: kubernetes.io/arch
-                    operator: In
-                    values:
-                      - arm64
+      # Force x86 node (lake) - Wazuh doesn't have ARM images
+      nodeSelector:
+        kubernetes.io/hostname: lake
       
       initContainers:
         # Wait for indexer and manager

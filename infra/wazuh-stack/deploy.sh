@@ -14,14 +14,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# Check kubectl/zcloud access
-if command -v zcloud &> /dev/null; then
-    KUBECTL="zcloud k"
-    echo -e "${GREEN}Using zcloud CLI${NC}"
-else
-    KUBECTL="kubectl"
-    echo -e "${YELLOW}Using kubectl directly${NC}"
-fi
+# Always use kubectl
+KUBECTL="kubectl"
+echo -e "${GREEN}Using kubectl${NC}"
 
 echo ""
 echo "Step 1: Creating namespace and secrets..."
