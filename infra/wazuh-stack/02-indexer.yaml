@@ -131,7 +131,7 @@ spec:
       
       containers:
         - name: wazuh-indexer
-          image: wazuh/wazuh-indexer:4.9.2
+          image: wazuh/wazuh-indexer:4.14.1
           
           env:
             - name: OPENSEARCH_JAVA_OPTS

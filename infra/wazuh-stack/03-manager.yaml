@@ -310,7 +310,7 @@ spec:
       
       containers:
         - name: wazuh-manager
-          image: wazuh/wazuh-manager:4.9.2
+          image: wazuh/wazuh-manager:4.14.1
           
           env:
             - name: INDEXER_URL

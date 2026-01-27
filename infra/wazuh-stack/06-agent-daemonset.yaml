@@ -37,7 +37,7 @@ spec:
       # Use node name as agent name
       initContainers:
         - name: configure-agent
-          image: wazuh/wazuh-agent:4.9.2
+          image: wazuh/wazuh-agent:4.14.1
           securityContext:
             privileged: true
           command:
@@ -213,7 +213,7 @@ spec:
       
       containers:
         - name: wazuh-agent
-          image: wazuh/wazuh-agent:4.9.2
+          image: wazuh/wazuh-agent:4.14.1
           
           securityContext:
             privileged: true
