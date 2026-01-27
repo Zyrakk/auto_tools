@@ -178,7 +178,8 @@ spec:
       serviceAccountName: victoriametrics
       containers:
         - name: victoriametrics
-          image: victoriametrics/victoria-metrics:v1.96.0
+          # UPDATED: v1.96.0 -> v1.122.0 (LTS)
+          image: victoriametrics/victoria-metrics:v1.122.0
           args:
             - -storageDataPath=/data
             - -promscrape.config=/config/prometheus.yml

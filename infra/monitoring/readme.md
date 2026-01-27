@@ -4,12 +4,12 @@ Stack de monitorización para el cluster k3s de ZCloud.
 
 ## Componentes
 
-| Componente | Versión | Descripción |
-|------------|---------|-------------|
-| Node Exporter | v1.7.0 | Métricas de sistema (CPU, RAM, disco, red) de cada nodo |
-| Kube State Metrics | v2.10.1 | Métricas de objetos Kubernetes (pods, deployments, etc) |
-| VictoriaMetrics | v1.96.0 | Backend de métricas (compatible Prometheus, más eficiente) |
-| Grafana | v10.3.1 | Dashboards y visualización |
+| Componente | Versión anterior | Versión actual | Cambios principales |
+|------------|------------------|----------------|---------------------|
+| Node Exporter | v1.7.0 | **v1.10.2** | Bugfix métricas Zswap |
+| Kube State Metrics | v2.10.1 | **v2.17.0** | Nuevos endpoints livez/readyz, métricas deletion_timestamp |
+| VictoriaMetrics | v1.96.0 | **v1.122.0** | LTS release, security fixes, mejoras rendimiento |
+| Grafana | v10.3.1 | **v12.3.1** | Dynamic dashboards, nuevas visualizaciones |
 
 ## Arquitectura
 
@@ -44,7 +44,27 @@ Stack de monitorización para el cluster k3s de ZCloud.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Despliegue
+## Actualización (desde versiones anteriores)
+
+Si ya tienes el stack desplegado, actualiza así:
+
+```bash
+# Rolling update - los pods se recrearán con las nuevas imágenes
+zcloud apply 01-node-exporter.yaml
+zcloud apply 02-victoriametrics.yaml
+zcloud apply 03-grafana.yaml
+zcloud apply 04-kube-state-metrics.yaml
+
+# Verificar que los pods se actualizan
+zcloud k get pods -n monitoring -w
+
+# Verificar versiones desplegadas
+zcloud k get pods -n monitoring -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[0].image}{"\n"}{end}'
+```
+
+**Nota sobre VictoriaMetrics:** La actualización de v1.96.0 a v1.122.0 es compatible. Los datos existentes se mantendrán.
+
+## Despliegue inicial
 
 ### Opción 1: Con zcloud (recomendado)
 
@@ -89,10 +109,8 @@ zcloud k get pods -n monitoring
 # Ver PVCs
 zcloud k get pvc -n monitoring
 
-# Output esperado:
-# NAME                   STATUS   VOLUME   CAPACITY   ACCESS MODES   STORAGECLASS
-# victoriametrics-data   Bound    ...      50Gi       RWO            nfs-shared
-# grafana-data           Bound    ...      5Gi        RWO            nfs-shared
+# Verificar versiones
+zcloud k get deploy,ds -n monitoring -o jsonpath='{range .items[*]}{.metadata.name}{": "}{.spec.template.spec.containers[0].image}{"\n"}{end}'
 ```
 
 ## Acceso
@@ -149,6 +167,7 @@ zcloud port-forward victoriametrics.monitoring.svc 8428:8428
 - `kube_deployment_*` - Deployments
 - `kube_node_*` - Nodos
 - `kube_pvc_*` - Volúmenes
+- `kube_*_deletion_timestamp` - (NUEVO en v2.17) Timestamps de borrado
 
 ### cAdvisor (contenedores)
 - `container_cpu_*` - CPU por contenedor
@@ -192,8 +211,12 @@ zcloud k get ds -n monitoring
 zcloud k get pods -n monitoring -o wide
 ```
 
-## Próximos pasos
+## Changelog
 
-1. **Traefik Ingress** - Exponer Grafana en `grafana.zyrak.cloud`
-2. **Alerting** - Configurar alertas en Grafana/Alertmanager
-3. **Wazuh** - Security monitoring
+### 2026-01-27
+- **Node Exporter**: v1.7.0 → v1.10.2
+- **Kube State Metrics**: v2.10.1 → v2.17.0
+  - Añadido RBAC para EndpointSlices
+  - Cambiado healthz → livez/readyz endpoints
+- **VictoriaMetrics**: v1.96.0 → v1.122.0 (LTS)
+- **Grafana**: v10.3.1 → v12.3.1
