@@ -21,6 +21,11 @@ spec:
       labels:
         app: wazuh-agent
     spec:
+      # IMPORTANTE: Wazuh Agent no tiene imagen ARM oficial. 
+      # Esto desplegará agentes SOLO en nodos AMD64 (lake).
+      nodeSelector:
+        kubernetes.io/arch: amd64
+
       # Run on all nodes including control-plane
       tolerations:
         - key: node-role.kubernetes.io/control-plane

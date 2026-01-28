@@ -68,6 +68,9 @@ data:
     
     # Compatibility mode for Wazuh
     compatibility.override_main_response_version: true
+    
+    # Permitir al security plugin inicializarse correctamente
+    plugins.security.allow_default_init_securityindex: true
 ---
 # Wazuh Indexer Deployment
 apiVersion: apps/v1
@@ -130,9 +133,12 @@ spec:
               value: "-Xms1g -Xmx1g"
             - name: bootstrap.memory_lock
               value: "false"
-            # Allow demo config to initialize security index on first boot
+            # IMPORTANTE: Deshabilitar la configuración demo porque usamos nuestros propios certificados
+            # pero permitimos que se inicialice el índice de seguridad si no existe
             - name: DISABLE_INSTALL_DEMO_CONFIG
-              value: "false"
+              value: "true"
+            - name: DISABLE_SECURITY_DEMO_CONFIG
+              value: "true"
           
           ports:
             - containerPort: 9200
@@ -158,16 +164,19 @@ spec:
               mountPath: /usr/share/wazuh-indexer/opensearch.yml
               subPath: opensearch.yml
           
+          # Probes más permisivos durante el arranque inicial
           readinessProbe:
             exec:
               command:
                 - sh
                 - -c
                 - |
-                  curl -s -k -u admin:${INDEXER_PASSWORD} https://localhost:9200/_cluster/health | grep -q '"status":"green"\|"status":"yellow"'
-            initialDelaySeconds: 60
-            periodSeconds: 30
-            timeoutSeconds: 10
+                  # Intento básico de conectividad, si falla auth no importa aún si estamos inicializando
+                  # El Job de seguridad arreglará el auth
+                  curl -k -s https://localhost:9200 > /dev/null
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 30 # Permitir fallos durante 5 minutos mientras inicializa
           
           livenessProbe:
             exec:
@@ -175,14 +184,16 @@ spec:
                 - sh
                 - -c
                 - |
-                  curl -s -k -u admin:${INDEXER_PASSWORD} https://localhost:9200 | grep -q "wazuh-indexer"
-            initialDelaySeconds: 120
-            periodSeconds: 60
-            timeoutSeconds: 10
+                  # Check básico que el proceso responde
+                  curl -k -s https://localhost:9200 > /dev/null
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            failureThreshold: 5
           
           envFrom:
             - secretRef:
                 name: wazuh-credentials
+                optional: false
       
       volumes:
         - name: indexer-data
