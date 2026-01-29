@@ -110,7 +110,7 @@ wazuh:
   # La password DEBE tener: mayúscula, minúscula, número y símbolo (.*+?-)
   apiCred:
     username: "wazuh-wui"
-    password: "Zcloud.Wazuh" 
+    password: "Zcloud.Wazuh2026*" 
   
   # Password para registro de agentes
   authd:
