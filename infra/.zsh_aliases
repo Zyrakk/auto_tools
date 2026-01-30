@@ -1,0 +1,52 @@
+# cd Alias
+alias ..='cd ..'
+alias ...='cd ../..'
+alias ....='cd ../../..'
+alias ~='cd ~'
+
+# ls Alias
+alias ls='ls --color=auto'
+alias ll='ls -lah'
+alias lt='ls -lhtr'
+
+# System Alias
+alias df='df -h'
+alias du='du -h'
+alias cl='clear'
+alias free='free -h'
+alias ports='netstat -tulanp'
+alias psg='ps aux | grep -v grep | grep -i -e VSZ -e'
+
+# Git Alias
+alias gs='git status'
+alias ga='git add'
+alias gc='git commit'
+alias gp='git push'
+alias gl='git log --oneline --graph --decorate'
+alias gd='git diff'
+alias gco='git checkout'
+
+# K8s Basic Alias
+alias k='kubectl'
+alias kg='kubectl get'
+alias kd='kubectl describe'
+alias ka='kubectl apply -f'
+alias kdel='kubectl delete'
+
+# K8s Resources Alias
+alias kgd='kubectl get deployments'
+alias kgs='kubectl get svc'
+alias kgi='kubectl get ingress'
+alias kgns='kubectl get namespaces'
+
+# K8s Pods Alias
+alias kgp='kubectl get pods'
+alias kgpw='kubectl get pods -o wide'
+alias kex='kubectl exec -it'
+alias klogs='kubectl logs -f'
+alias klf='kubectl logs -f --tail=100'
+
+# K8s Utils Alias
+alias kn='kubectl config set-context --current --namespace'
+alias kevents='kubectl get events --sort-by=.metadata.creationTimestamp'
+alias kctx='kubectl config current-context'
